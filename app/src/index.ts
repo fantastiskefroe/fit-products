@@ -14,7 +14,7 @@ process.on('SIGINT', handleTermination);
 process.on('SIGTERM', handleTermination);
 
 function handleTermination(args) {
-    console.info(`Received ${args} shutting down`);
+    console.info(`Received ${args} - shutting down`);
     serviceRegistry.destructServices()
         .then(() => process.exit(0));
 }
