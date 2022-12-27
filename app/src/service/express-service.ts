@@ -3,78 +3,126 @@ import fetch from 'node-fetch';
 import express from 'express';
 import cors from 'cors';
 import {Product} from "../model/product";
+import {Raw} from "../model/raw";
+import {Variant} from "../model/variant";
+import {Tag} from "../model/tag";
+import {Category} from "../model/category";
 
 export class ExpressService implements Service {
-    public readonly name = "Express";
-    public readonly environmentVariables = [
-        'PORT'
-    ];
+  public readonly name = "Express";
+  public readonly environmentVariables = [
+    'PORT'
+  ];
 
-    private static readonly URL_PREFIX = 'https://fantastiskefroe.dk';
-    private static readonly ALL_PRODUCTS_URL = ExpressService.URL_PREFIX + '/collections/all-products';
+  private static readonly URL_PREFIX = 'https://fantastiskefroe.dk';
+  private static readonly ALL_PRODUCTS_URL = `${ExpressService.URL_PREFIX}/collections/all-products`;
 
-    private server;
+  private server;
 
-    public init(): Promise<void> {
-        const app = express();
-        const port = process.env.PORT;
+  public init(): Promise<void> {
+    const app = express();
+    const port = process.env.PORT;
 
-        const corsOptions = {
-            origin: ["http://localhost:8080", /\.fantastiskefroe\.dk$/]
-        };
+    const corsOptions = {
+      origin: ["http://localhost:8080", /\.fantastiskefroe\.dk$/]
+    };
 
-        app.use(cors(corsOptions));
+    app.use(cors(corsOptions));
 
-        app.get('/', this.getAllProducts.bind(this));
+    app.get('/all', this.getAll.bind(this));
+    app.get('/products', this.getAllProducts.bind(this));
+    app.get('/tags', this.getAllTags.bind(this));
+    app.get('/categories', this.getAllCategories.bind(this));
 
-        return new Promise(resolve => {
-            this.server = app.listen(port, () => {
-                console.log(`Listening on port ${port}`);
-                resolve();
-            });
-        });
+    return new Promise(resolve => {
+      this.server = app.listen(port, () => {
+        console.log(`Listening on port ${port}`);
+        resolve();
+      });
+    });
+  }
+
+  public destruct(): Promise<void> {
+    return new Promise(resolve => {
+      this.server.close(() => resolve());
+    });
+  }
+
+  private getAll(_req, res) {
+    this.fetchAll()
+    .then(rawInput => ({
+      products: ExpressService.mapProducts(rawInput),
+      tags: ExpressService.mapTags(rawInput),
+      categories: ExpressService.mapCategories(rawInput)
+    }))
+    .then(products => res.json(products));
+  }
+
+  private getAllProducts(_req, res) {
+    this.fetchAll()
+    .then(ExpressService.mapProducts)
+    .then(products => res.json(products));
+  }
+
+  private getAllTags(_req, res) {
+    this.fetchAll()
+    .then(ExpressService.mapTags)
+    .then(products => res.json(products));
+  }
+
+  private getAllCategories(_req, res) {
+    this.fetchAll()
+    .then(ExpressService.mapCategories)
+    .then(products => res.json(products));
+  }
+
+  private async fetchAll(): Promise<Raw> {
+    const options = {
+      method: 'GET'
+    };
+
+    return fetch(ExpressService.ALL_PRODUCTS_URL, options)
+    .then(response => response.text())
+    .then(text => (JSON.parse(text) as Raw))
+    .catch(error => {
+      console.error('error', error);
+
+      return {
+        products: {},
+        tags: [],
+        types: []
+      };
+    });
+  }
+
+  private static mapProducts(rawInput: Raw): Product[] {
+    const result: Product[] = [];
+    for (const rawProduct of Object.values(rawInput.products)) {
+      const variants: Variant[] = [];
+      for (const rawVariant of Object.values(rawProduct.variants)) {
+        variants.push(rawVariant);
+      }
+
+      result.push({
+        id: rawProduct.id,
+        title: rawProduct.title,
+        handle: rawProduct.handle,
+        url: ExpressService.URL_PREFIX + rawProduct.url,
+        imageUrl: rawProduct.image,
+        tags: rawProduct.tags,
+        category: rawProduct.type,
+        variants: variants
+      });
     }
 
-    public destruct(): Promise<void> {
-        return new Promise(resolve => {
-            this.server.close(() => resolve());
-        });
-    }
+    return result;
+  }
 
-    private getAllProducts(_req, res) {
-        this.fetchProducts()
-            .then(products => res.json(products));
-    }
+  private static mapTags(rawInput: Raw): Tag[] {
+    return rawInput.tags;
+  }
 
-    private async fetchProducts(): Promise<Product[]> {
-        const options = {
-            method: 'GET'
-        };
-
-        return fetch(ExpressService.ALL_PRODUCTS_URL, options)
-            .then(response => response.text())
-            .then(ExpressService.mapProducts)
-            .catch(error => {
-                console.error('error', error);
-                return [];
-            });
-    }
-
-    private static mapProducts(input: string): Product[] {
-        const parsed: {products: Record<string, { id: string, title: string, handle: string, url: string, image: string, variants }>} = JSON.parse(input);
-
-        const result: Product[] = [];
-        for (const value of Object.values(parsed.products)) {
-            result.push({
-                id: value.id,
-                title: value.title,
-                handle: value.handle,
-                url: ExpressService.URL_PREFIX + value.url,
-                imageUrl: value.image,
-                variants: value.variants
-            });
-        }
-
-        return result;
-    }
+  private static mapCategories(rawInput: Raw): Category[] {
+    return rawInput.types;
+  }
 }

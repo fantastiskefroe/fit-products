@@ -1,14 +1,15 @@
+import {Tag} from "./tag";
+import {Category} from "./category";
+import {Id} from "./id";
+import {Variant} from "./variant";
+
 export interface Product {
-    id: string;
+    id: Id;
     title: string;
     handle: string;
     url: string;
     imageUrl: string;
-    variants: {
-        id: string,
-        title: string,
-        sku: string,
-        inventory: number,
-        price: number
-    };
+    tags: Tag[];
+    category: Category
+    variants: Variant[];
 }
